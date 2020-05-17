@@ -1,0 +1,3 @@
+https://github.com/TwT-BoJi/writemdict/blob/master/fileformat.md
+
+wc -c mdict/coca.mdx

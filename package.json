@@ -1,0 +1,13 @@
+{
+  "name": "nuo-mdict",
+  "version": "1.0.0",
+  "main": "main.js",
+  "author": "twt",
+  "license": "MIT",
+  "scripts": {
+    "start": "node ./main.js"
+  },
+  "dependencies": {
+    "adler-32": "^1.2.0"
+  }
+}
