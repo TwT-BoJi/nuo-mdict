@@ -8,4 +8,4 @@ def log(x):
     time = f'{datetime.now():%Y/%m/%d %H:%M:%S.%f}'
     print(f'>>>> {time} | python: {version}')
     print(f'{x}')
-    print(f'<<<<')
+    print()
