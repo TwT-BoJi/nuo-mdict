@@ -24,13 +24,15 @@ def part(sequence, offset, length):
 
 def _fast_decrypt(data, key):
     b = bytearray(data)
-    key = bytearray(key)
-    previous = 0x36
+    k = bytearray(key)
+    p = 0x36
+
     for i in range(len(b)):
         t = (b[i] >> 4 | b[i] << 4) & 0xff
-        t = t ^ previous ^ (i & 0xff) ^ key[i % len(key)]
-        previous = b[i]
+        t = t ^ p ^ (i & 0xff) ^ k[i % len(k)]
+        p = b[i]
         b[i] = t
+
     return bytes(b)
 
 
@@ -61,6 +63,10 @@ def analyze_section_header(binary, offset):
 
 
 def analyze_section_keyword(binary, offset):
+    ''' TODO:
+        If the parameter Encrypted in the header has the lowest bit set (i.e. Encrypted | 1 is nonzero),
+        then the 40-byte block from num_blocks are encrypted
+    '''
     array = [
         ['num_block', 0, 8],
         ['num_entry', 8, 8],
@@ -81,16 +87,14 @@ def analyze_section_keyword(binary, offset):
     p = part(binary, offset + 0, 40)
     assert zlib.adler32(p) == checksum
 
-    analyze_keyword_index(binary, offset + 44, data)
+    analyze_keyword_block_mate(binary, offset + 44, data)
 
     return data
 
 
-# TODO: rename `keyword_block_info` `keyword_block_mate` `block_mate`
-def analyze_keyword_index(binary, offset, meta):
-    p = part(binary, offset + 0, meta['len_index_comp'])
-    # TODO: if verions > 2
-    block_decrypted = _mdx_decrypt(p)
+def uncompressed_block(block, encrypted):
+    if encrypted:
+        block = _mdx_decrypt(block)
 
     def uncompressed_none(data):
         return data
@@ -101,34 +105,31 @@ def analyze_keyword_index(binary, offset, meta):
     def uncompressed_zlib(data):
         return zlib.decompress(data)
 
-    compress_type = part(block_decrypted, 0, 4)
-    d = dict([
+    compress_type = part(block, 0, 4)
+    func_map = dict([
         (b'\x00\x00\x00\x00', uncompressed_none),
         (b'\x01\x00\x00\x00', uncompressed_lzo),
         (b'\x02\x00\x00\x00', uncompressed_zlib),
     ])
-    compressed = part(block_decrypted, 8, meta['len_index_comp'] - 8)
-    uncompressed = d[compress_type](compressed)
 
-    b = part(block_decrypted, 4, 4)
+    compressed = part(block, 8, len(block) - 8)
+    uncompressed = func_map[compress_type](compressed)
+
+    b = part(block, 4, 4)
     checksum = uint_from_byte_be(b)
+    assert checksum == zlib.adler32(uncompressed)
 
-    log(f'decompressed { uncompressed }')
+    return uncompressed
 
 
-def _analyze_keyword_index(binary, offset, context):
-    t = part(binary, offset + 0, 4)
-    num_block0 = uint_from_byte_le(t)
-    log(f'num_block0: {num_block0}')
+def analyze_keyword_block_mate(binary, offset, meta):
+    b = part(binary, offset + 0, meta['len_index_comp'])
+    block = uncompressed_block(b, encrypted = True)
+    # log(f'block { block }')
 
-    t = part(binary, offset + 4, 2)
-    len_keyword0 = uint_from_byte_le(t)
-    log(f'len_keyword0: {len_keyword0}')
-
-    c = part(binary, offset + 0, 100)
-    log(f'baoli {c}')
-
-    pass
+    b = part(block, 0, 8)
+    num_keyword_block_0 = uint_from_byte_be(b)
+    log(f'num_keyword_block_0 { num_keyword_block_0 }')
 
 
 def main():

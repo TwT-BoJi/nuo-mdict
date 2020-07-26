@@ -130,4 +130,3 @@ def ripemd128(message):
 
 def hexstr(bstr):
     return "".join("{0:02x}".format(b) for b in bstr)
-
