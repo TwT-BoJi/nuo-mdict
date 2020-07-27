@@ -42,6 +42,37 @@ def _mdx_decrypt(comp_block):
     return comp_block[0:8] + _fast_decrypt(comp_block[8:], key)
 
 
+def uncompressed_block(block, encrypted):
+    if encrypted:
+        block = _mdx_decrypt(block)
+
+    def uncompressed_none(data):
+        return data
+
+    def uncompressed_lzo(data):
+        raise Exception('compress not support')
+
+    def uncompressed_zlib(data):
+        return zlib.decompress(data)
+
+    compress_type = part(block, 0, 4)
+    func_map = dict([
+        (b'\x00\x00\x00\x00', uncompressed_none),
+        (b'\x01\x00\x00\x00', uncompressed_lzo),
+        (b'\x02\x00\x00\x00', uncompressed_zlib),
+    ])
+
+    compressed = part(block, 8, len(block) - 8)
+    uncompressed = func_map[compress_type](compressed)
+
+    b = part(block, 4, 4)
+    checksum = uint_from_byte_be(b)
+
+    assert checksum == zlib.adler32(uncompressed)
+
+    return uncompressed
+
+
 def analyze_section_header(binary, offset):
     t = part(binary, offset + 0, 4)
     len_xml = uint_from_byte_be(t)
@@ -92,44 +123,62 @@ def analyze_section_keyword(binary, offset):
     return data
 
 
-def uncompressed_block(block, encrypted):
-    if encrypted:
-        block = _mdx_decrypt(block)
-
-    def uncompressed_none(data):
-        return data
-
-    def uncompressed_lzo(data):
-        raise Exception('compress not support')
-
-    def uncompressed_zlib(data):
-        return zlib.decompress(data)
-
-    compress_type = part(block, 0, 4)
-    func_map = dict([
-        (b'\x00\x00\x00\x00', uncompressed_none),
-        (b'\x01\x00\x00\x00', uncompressed_lzo),
-        (b'\x02\x00\x00\x00', uncompressed_zlib),
-    ])
-
-    compressed = part(block, 8, len(block) - 8)
-    uncompressed = func_map[compress_type](compressed)
-
-    b = part(block, 4, 4)
-    checksum = uint_from_byte_be(b)
-    assert checksum == zlib.adler32(uncompressed)
-
-    return uncompressed
-
-
 def analyze_keyword_block_mate(binary, offset, meta):
     b = part(binary, offset + 0, meta['len_index_comp'])
     block = uncompressed_block(b, encrypted = True)
-    # log(f'block { block }')
 
     b = part(block, 0, 8)
     num_keyword_block_0 = uint_from_byte_be(b)
     log(f'num_keyword_block_0 { num_keyword_block_0 }')
+
+    def process(block, offset):
+        len_null = 1
+
+        b = part(block, offset + 0, 8)
+        num_keyword = uint_from_byte_be(b)
+
+        offset += 8
+
+        b = part(block, offset + 0, 2)
+        len_head = uint_from_byte_be(b)
+
+        b = part(block, offset + 2, len_head)
+        head_keyword = b
+
+        offset += 2 + len_head + len_null
+
+        b = part(block, offset + 0, 2)
+        len_tail = uint_from_byte_be(b)
+
+        b = part(block, offset + 2, len_tail)
+        tail_keyword = b
+
+        offset += 2 + len_tail + len_null
+
+        b = part(block, offset + 0, 8)
+        len_compressed = uint_from_byte_be(b)
+
+        b = part(block, offset + 8, 8)
+        len_uncompressed = uint_from_byte_be(b)
+
+        offset += 8 + 8
+
+        d = {}
+        d['num_keyword'] = num_keyword
+        d['head_keyword'] = head_keyword
+        d['tail_keyword'] = tail_keyword
+        d['len_compressed'] = len_compressed
+        d['len_uncompressed'] = len_uncompressed
+
+        log(f'd: { d }')
+        return [d, offset]
+
+
+    process(block, 0)
+    # data = {}
+    # count = 0
+    # while count < meta['num_block']:
+    #     process(binary, 0)
 
 
 def main():

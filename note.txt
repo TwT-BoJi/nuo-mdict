@@ -1,4 +1,4 @@
-https://github.com/TwT-BoJi/writemdict/blob/master/fileformat.md
+https://github.com/twt-nim/writemdict/blob/master/fileformat.md
 https://bitbucket.org/xwang/mdict-analysis/src/master/readmdict.py
 
 wc -c mdict/coca.mdx
