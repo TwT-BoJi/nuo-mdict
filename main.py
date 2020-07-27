@@ -93,45 +93,13 @@ def analyze_section_header(binary, offset):
     return data
 
 
-def analyze_section_keyword(binary, offset):
-    ''' TODO:
-        If the parameter Encrypted in the header has the lowest bit set (i.e. Encrypted | 1 is nonzero),
-        then the 40-byte block from num_blocks are encrypted
-    '''
-    array = [
-        ['num_block', 0, 8],
-        ['num_entry', 8, 8],
-        ['len_index_deco', 16, 8],
-        ['len_index_comp', 24, 8],
-        ['len_block', 32, 8],
-    ]
-
-    data = {}
-    for name, index, length in array:
-        b = part(binary, offset + index, length)
-        i = uint_from_byte_be(b)
-        data[name] = i
-
-    b = part(binary, offset + 40, 4)
-    checksum = uint_from_byte_be(b)
-
-    p = part(binary, offset + 0, 40)
-    assert zlib.adler32(p) == checksum
-
-    analyze_keyword_block_mate(binary, offset + 44, data)
-
-    return data
-
-
-def analyze_keyword_block_mate(binary, offset, meta):
-    b = part(binary, offset + 0, meta['len_index_comp'])
+def analyze_keyword_block_mate(binary, offset, context):
+    b = part(binary, offset + 0, context['len_index_comp'])
     block = uncompressed_block(b, encrypted = True)
 
-    b = part(block, 0, 8)
-    num_keyword_block_0 = uint_from_byte_be(b)
-    log(f'num_keyword_block_0 { num_keyword_block_0 }')
+    assert len(block) == context['len_index_deco']
 
-    def process(block, offset):
+    def keyword_block_mate(block, offset):
         len_null = 1
 
         b = part(block, offset + 0, 8)
@@ -170,15 +138,53 @@ def analyze_keyword_block_mate(binary, offset, meta):
         d['len_compressed'] = len_compressed
         d['len_uncompressed'] = len_uncompressed
 
-        log(f'd: { d }')
-        return [d, offset]
+        return (d, offset)
+
+    mates = []
+    index = 0
+    count = 0
+    while count < context['num_block']:
+        m, i = keyword_block_mate(block, index)
+        mates.append(m)
+        index = i
+        count = count + 1
+
+    log(f'data { mates }')
 
 
-    process(block, 0)
-    # data = {}
-    # count = 0
-    # while count < meta['num_block']:
-    #     process(binary, 0)
+def analyze_keyword_block(binary, offset, context):
+    pass
+
+
+def analyze_section_keyword(binary, offset):
+    ''' TODO:
+        If the parameter Encrypted in the header has the lowest bit set (i.e. Encrypted | 1 is nonzero),
+        then the 40-byte block from num_blocks are encrypted
+    '''
+    array = [
+        ['num_block', 0, 8],
+        ['num_entry', 8, 8],
+        ['len_index_deco', 16, 8],
+        ['len_index_comp', 24, 8],
+        ['len_block', 32, 8],
+    ]
+
+    mate = {}
+    for name, index, length in array:
+        b = part(binary, offset + index, length)
+        i = uint_from_byte_be(b)
+        mate[name] = i
+
+    b = part(binary, offset + 40, 4)
+    checksum = uint_from_byte_be(b)
+
+    p = part(binary, offset + 0, 40)
+    assert zlib.adler32(p) == checksum
+
+    analyze_keyword_block_mate(binary, offset + 44, mate)
+    analyze_keyword_block(binary, offset + mate['len_index_comp'], mate)
+
+    return mate
 
 
 def main():
