@@ -1,8 +1,15 @@
 import zlib
-from struct import pack, unpack
+from struct import (
+    pack,
+    unpack,
+)
 
 from ripemd128 import ripemd128
 from log import log
+from model import (
+    KeywordIndexMate,
+    KeywordSectionMate,
+)
 
 
 def test(exp, msg = ''):
@@ -93,11 +100,15 @@ def analyze_section_header(binary, offset):
     return data
 
 
-def analyze_keyword_block_mate(binary, offset, context):
-    b = part(binary, offset + 0, context['len_index_comp'])
+def analyze_keyword_index_mate(binary, offset, context):
+    ''' TODO:
+        If the parameter Encrypted in the header has its second-lowest bit set (i.e. Encrypted | 2 is nonzero),
+        then the keyword index is further encrypted.
+    '''
+    b = part(binary, offset + 0, context.len_index_mate_comp)
     block = uncompressed_block(b, encrypted = True)
 
-    assert len(block) == context['len_index_deco']
+    assert len(block) == context.len_index_mate_unco
 
     def keyword_block_mate(block, offset):
         len_null = 1
@@ -124,35 +135,36 @@ def analyze_keyword_block_mate(binary, offset, context):
         offset += 2 + len_tail + len_null
 
         b = part(block, offset + 0, 8)
-        len_compressed = uint_from_byte_be(b)
+        len_comp = uint_from_byte_be(b)
 
         b = part(block, offset + 8, 8)
-        len_uncompressed = uint_from_byte_be(b)
+        len_unco = uint_from_byte_be(b)
 
         offset += 8 + 8
 
-        d = {}
-        d['num_keyword'] = num_keyword
-        d['head_keyword'] = head_keyword
-        d['tail_keyword'] = tail_keyword
-        d['len_compressed'] = len_compressed
-        d['len_uncompressed'] = len_uncompressed
+        mate = KeywordIndexMate(
+            num_keyword = num_keyword,
+            len_comp = len_comp,
+            len_unco = len_unco,
+            head_keyword = head_keyword,
+            tail_keyword = tail_keyword,
+        )
 
-        return (d, offset)
+        return (mate, offset)
 
     mates = []
     index = 0
     count = 0
-    while count < context['num_block']:
+    while count < context.num_index:
         m, i = keyword_block_mate(block, index)
         mates.append(m)
         index = i
         count = count + 1
 
-    log(f'data { mates }')
+    return mates
 
 
-def analyze_keyword_block(binary, offset, context):
+def analyze_keyword_index(binary, offset, context):
     pass
 
 
@@ -162,18 +174,19 @@ def analyze_section_keyword(binary, offset):
         then the 40-byte block from num_blocks are encrypted
     '''
     array = [
-        ['num_block', 0, 8],
-        ['num_entry', 8, 8],
-        ['len_index_deco', 16, 8],
-        ['len_index_comp', 24, 8],
-        ['len_block', 32, 8],
+        ['num_index', 0, 8],
+        ['num_keyword', 8, 8],
+        ['len_index_mate_unco', 16, 8],
+        ['len_index_mate_comp', 24, 8],
+        ['len_indexs', 32, 8],
     ]
 
-    mate = {}
+    d = {}
     for name, index, length in array:
         b = part(binary, offset + index, length)
         i = uint_from_byte_be(b)
-        mate[name] = i
+        d[name] = i
+    mate = KeywordSectionMate(**d)
 
     b = part(binary, offset + 40, 4)
     checksum = uint_from_byte_be(b)
@@ -181,8 +194,10 @@ def analyze_section_keyword(binary, offset):
     p = part(binary, offset + 0, 40)
     assert zlib.adler32(p) == checksum
 
-    analyze_keyword_block_mate(binary, offset + 44, mate)
-    analyze_keyword_block(binary, offset + mate['len_index_comp'], mate)
+    m = analyze_keyword_index_mate(binary, offset + 44, mate)
+    mate.index_mate = m
+
+    analyze_keyword_index(binary, offset + mate.len_index_mate_comp, mate)
 
     return mate
 
