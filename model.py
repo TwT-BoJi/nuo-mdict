@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 
 
 @dataclass
@@ -18,4 +18,4 @@ class KeywordSectionMate:
     len_index_mate_unco: Optional[int] = None
     len_index_mate_comp: Optional[int] = None
     len_indexs: Optional[int] = None
-    index_mate: Optional[KeywordIndexMate] = None
+    indexs_mate: Optional[List[KeywordIndexMate]] = None

@@ -12,11 +12,6 @@ from model import (
 )
 
 
-def test(exp, msg = ''):
-    if (not exp):
-        log(f'!!!! test fail {msg}')
-
-
 def uint_from_byte_be(b):
     return int.from_bytes(b, 'big')
 
@@ -27,6 +22,23 @@ def uint_from_byte_le(b):
 
 def part(sequence, offset, length):
     return sequence[slice(offset, offset + length)]
+
+
+def part_null(sequence, offset):
+    i = offset
+    while sequence[i] != 0:
+        i += 1
+    return sequence[slice(offset, i + 1)]
+
+
+def uint_be(*args, **kwargs):
+    p = part(*args, **kwargs)
+    return uint_from_byte_be(p)
+
+
+def uint_le(*args, **kwargs):
+    p = part(*args, **kwargs)
+    return uint_from_byte_le(p)
 
 
 def _fast_decrypt(data, key):
@@ -164,8 +176,32 @@ def analyze_keyword_index_mate(binary, offset, context):
     return mates
 
 
-def analyze_keyword_index(binary, offset, context):
-    pass
+def analyze_keyword_indexs(binary, offset, mate):
+    def analyze_index(block, mate):
+        pairs = []
+        point = 0
+        for _ in range(mate.num_keyword):
+            position = uint_be(block, point, 8)
+            keyword = part_null(block, point + 8)
+            pairs.append([keyword, position])
+            point += 8 + len(keyword)
+        return pairs
+
+    pairs = []
+    point = offset
+    for i in range(mate.num_index):
+        data = mate.indexs_mate[i]
+
+        b = part(binary, point, data.len_comp)
+        block = uncompressed_block(b, encrypted = False)
+        ps = analyze_index(block, data)
+        pairs = [*pairs, *ps]
+
+        point += data.len_comp
+
+
+    log(f'len(pairs) = { len(pairs) }')
+
 
 
 def analyze_section_keyword(binary, offset):
@@ -195,9 +231,10 @@ def analyze_section_keyword(binary, offset):
     assert zlib.adler32(p) == checksum
 
     m = analyze_keyword_index_mate(binary, offset + 44, mate)
-    mate.index_mate = m
+    mate.indexs_mate = m
 
-    analyze_keyword_index(binary, offset + mate.len_index_mate_comp, mate)
+    s = mate.len_index_mate_comp + 44
+    analyze_keyword_indexs(binary, offset + s, mate)
 
     return mate
 
