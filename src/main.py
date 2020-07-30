@@ -7,7 +7,7 @@ from struct import (
 from log import log
 from util import (
     part,
-    part_util0,
+    part_till0,
     uint_be,
     uint_le,
 )
@@ -144,7 +144,7 @@ def analyze_keyword_indexs(binary, offset, mate):
         point = 0
         for _ in range(mate.num_keyword):
             position = uint_be(block, point, 8)
-            keyword = part_util0(block, point + 8)
+            keyword = part_till0(block, point + 8)
             pairs.append([keyword, position])
             point += 8 + len(keyword)
         return pairs

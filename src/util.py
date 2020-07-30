@@ -10,7 +10,7 @@ def part(sequence, offset, length):
     return sequence[slice(offset, offset + length)]
 
 
-def part_util0(sequence, offset):
+def part_till0(sequence, offset):
     i = offset
     while sequence[i] != 0:
         i += 1
