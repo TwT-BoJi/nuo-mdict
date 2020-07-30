@@ -4,41 +4,18 @@ from struct import (
     unpack,
 )
 
-from ripemd128 import ripemd128
 from log import log
+from util import (
+    part,
+    part_util0,
+    uint_be,
+    uint_le,
+)
+from ripemd128 import ripemd128
 from model import (
     KeywordIndexMate,
     KeywordSectionMate,
 )
-
-
-def uint_from_byte_be(b):
-    return int.from_bytes(b, 'big')
-
-
-def uint_from_byte_le(b):
-    return int.from_bytes(b, 'little')
-
-
-def part(sequence, offset, length):
-    return sequence[slice(offset, offset + length)]
-
-
-def part_util0(sequence, offset):
-    i = offset
-    while sequence[i] != 0:
-        i += 1
-    return sequence[slice(offset, i + 1)]
-
-
-def uint_be(*args, **kwargs):
-    p = part(*args, **kwargs)
-    return uint_from_byte_be(p)
-
-
-def uint_le(*args, **kwargs):
-    p = part(*args, **kwargs)
-    return uint_from_byte_le(p)
 
 
 def _fast_decrypt(data, key):
@@ -185,7 +162,6 @@ def analyze_keyword_indexs(binary, offset, mate):
         point += data.len_comp
 
     log(f'len(pairs) = { len(pairs) }')
-
 
 
 def analyze_section_keyword(binary, offset):
