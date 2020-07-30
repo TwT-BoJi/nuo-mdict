@@ -24,7 +24,7 @@ def part(sequence, offset, length):
     return sequence[slice(offset, offset + length)]
 
 
-def part_null(sequence, offset):
+def part_util0(sequence, offset):
     i = offset
     while sequence[i] != 0:
         i += 1
@@ -84,24 +84,19 @@ def uncompressed_block(block, encrypted):
     compressed = part(block, 8, len(block) - 8)
     uncompressed = func_map[compress_type](compressed)
 
-    b = part(block, 4, 4)
-    checksum = uint_from_byte_be(b)
-
+    checksum = uint_be(block, 4, 4)
     assert checksum == zlib.adler32(uncompressed)
 
     return uncompressed
 
 
 def analyze_section_header(binary, offset):
-    t = part(binary, offset + 0, 4)
-    len_xml = uint_from_byte_be(t)
+    len_xml = uint_be(binary, offset + 0, 4)
 
     xml_b = part(binary, offset + 4, len_xml)
     xml_s = xml_b.decode('utf-16le')
 
-    t = part(binary, offset + 4 + len_xml, 4)
-    checksum = uint_from_byte_le(t)
-
+    checksum = uint_le(binary, offset + 4 + len_xml, 4)
     assert zlib.adler32(xml_b) == checksum
 
     size = 4 + len_xml + 4
@@ -125,32 +120,22 @@ def analyze_keyword_index_mate(binary, offset, context):
     def keyword_block_mate(block, offset):
         len_null = 1
 
-        b = part(block, offset + 0, 8)
-        num_keyword = uint_from_byte_be(b)
+        num_keyword = uint_be(block, offset + 0, 8)
 
         offset += 8
 
-        b = part(block, offset + 0, 2)
-        len_head = uint_from_byte_be(b)
-
-        b = part(block, offset + 2, len_head)
-        head_keyword = b
+        len_head = uint_be(block, offset + 0, 2)
+        head_keyword = part(block, offset + 2, len_head)
 
         offset += 2 + len_head + len_null
 
-        b = part(block, offset + 0, 2)
-        len_tail = uint_from_byte_be(b)
-
-        b = part(block, offset + 2, len_tail)
-        tail_keyword = b
+        len_tail = uint_be(block, offset + 0, 2)
+        tail_keyword = part(block, offset + 2, len_tail)
 
         offset += 2 + len_tail + len_null
 
-        b = part(block, offset + 0, 8)
-        len_comp = uint_from_byte_be(b)
-
-        b = part(block, offset + 8, 8)
-        len_unco = uint_from_byte_be(b)
+        len_comp = uint_be(block, offset + 0, 8)
+        len_unco = uint_be(block, offset + 8, 8)
 
         offset += 8 + 8
 
@@ -182,7 +167,7 @@ def analyze_keyword_indexs(binary, offset, mate):
         point = 0
         for _ in range(mate.num_keyword):
             position = uint_be(block, point, 8)
-            keyword = part_null(block, point + 8)
+            keyword = part_util0(block, point + 8)
             pairs.append([keyword, position])
             point += 8 + len(keyword)
         return pairs
@@ -198,7 +183,6 @@ def analyze_keyword_indexs(binary, offset, mate):
         pairs = [*pairs, *ps]
 
         point += data.len_comp
-
 
     log(f'len(pairs) = { len(pairs) }')
 
@@ -219,13 +203,10 @@ def analyze_section_keyword(binary, offset):
 
     d = {}
     for name, index, length in array:
-        b = part(binary, offset + index, length)
-        i = uint_from_byte_be(b)
-        d[name] = i
+        d[name] = uint_be(binary, offset + index, length)
     mate = KeywordSectionMate(**d)
 
-    b = part(binary, offset + 40, 4)
-    checksum = uint_from_byte_be(b)
+    checksum = uint_be(binary, offset + 40, 4)
 
     p = part(binary, offset + 0, 40)
     assert zlib.adler32(p) == checksum
