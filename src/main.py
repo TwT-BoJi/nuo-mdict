@@ -1,8 +1,4 @@
 import zlib
-from struct import (
-    pack,
-    unpack,
-)
 
 from log import log
 from util import (
@@ -10,32 +6,12 @@ from util import (
     part_till0,
     uint_be,
     uint_le,
+    _mdx_decrypt,
 )
-from ripemd128 import ripemd128
 from model import (
     KeywordIndexMate,
     KeywordSectionMate,
 )
-
-
-def _fast_decrypt(data, key):
-    b = bytearray(data)
-    k = bytearray(key)
-    p = 0x36
-
-    for i in range(len(b)):
-        t = (b[i] >> 4 | b[i] << 4) & 0xff
-        t = t ^ p ^ (i & 0xff) ^ k[i % len(k)]
-        p = b[i]
-        b[i] = t
-
-    return bytes(b)
-
-
-# TODO: rename
-def _mdx_decrypt(comp_block):
-    key = ripemd128(comp_block[4:8] + pack(b'<L', 0x3695))
-    return comp_block[0:8] + _fast_decrypt(comp_block[8:], key)
 
 
 def uncompressed_block(block, encrypted):
@@ -68,32 +44,24 @@ def uncompressed_block(block, encrypted):
 
 
 def analyze_section_header(binary, offset):
-    len_xml = uint_be(binary, offset + 0, 4)
+    len_xml = uint_be(binary, offset, 4)
 
-    xml_b = part(binary, offset + 4, len_xml)
-    xml_s = xml_b.decode('utf-16le')
+    offset += 4
 
-    checksum = uint_le(binary, offset + 4 + len_xml, 4)
+    xml_b = part(binary, offset, len_xml)
+    # xml_s = xml_b.decode('utf-16le')
+
+    offset += len_xml
+
+    checksum = uint_le(binary, offset, 4)
     assert zlib.adler32(xml_b) == checksum
 
-    size = 4 + len_xml + 4
-    data = {
-        'xml': xml_s,
-        'end': offset + size,
-    }
-    return data
+    offset += 4
+
+    return offset
 
 
 def analyze_keyword_index_mate(binary, offset, context):
-    ''' TODO:
-        If the parameter Encrypted in the header has its second-lowest bit set (i.e. Encrypted | 2 is nonzero),
-        then the keyword index is further encrypted.
-    '''
-    b = part(binary, offset + 0, context.len_index_mate_comp)
-    block = uncompressed_block(b, encrypted = True)
-
-    assert len(block) == context.len_index_mate_unco
-
     def keyword_block_mate(block, offset):
         len_null = 1
 
@@ -126,6 +94,16 @@ def analyze_keyword_index_mate(binary, offset, context):
 
         return (mate, offset)
 
+
+    ''' TODO:
+        If the parameter Encrypted in the header has its second-lowest bit set (i.e. Encrypted | 2 is nonzero),
+        then the keyword index is further encrypted.
+    '''
+    b = part(binary, offset, context.len_index_mate_comp)
+    block = uncompressed_block(b, encrypted = True)
+
+    assert len(block) == context.len_index_mate_unco
+
     mates = []
     index = 0
     count = 0
@@ -144,9 +122,10 @@ def analyze_keyword_indexs(binary, offset, mate):
         point = 0
         for _ in range(mate.num_keyword):
             position = uint_be(block, point, 8)
-            keyword = part_till0(block, point + 8)
+            keyword0 = part_till0(block, point + 8)
+            keyword = keyword0[slice(0, -1)]
             pairs.append([keyword, position])
-            point += 8 + len(keyword)
+            point += 8 + len(keyword0)
         return pairs
 
     pairs = []
@@ -161,7 +140,10 @@ def analyze_keyword_indexs(binary, offset, mate):
 
         point += data.len_comp
 
-    log(f'len(pairs) = { len(pairs) }')
+    d = dict(pairs)
+    assert len(d) == len(pairs), 'has duplicate keywords'
+    assert len(d) == mate.num_keyword
+    return d
 
 
 def analyze_section_keyword(binary, offset):
@@ -200,8 +182,8 @@ def main():
     with open('./mdict/coca.mdx', 'rb') as file:
         binary = file.read()
 
-        sh = analyze_section_header(binary, 0)
-        sk = analyze_section_keyword(binary, sh['end'] )
+        i = analyze_section_header(binary, 0)
+        sk = analyze_section_keyword(binary, i)
 
 
 if __name__ == '__main__':
