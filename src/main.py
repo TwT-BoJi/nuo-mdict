@@ -11,6 +11,7 @@ from util import (
 from model import (
     KeywordIndexMate,
     KeywordSectionMate,
+    RecordSectionMate,
 )
 
 
@@ -100,7 +101,7 @@ def analyze_keyword_index_mate(binary, offset, context):
         then the keyword index is further encrypted.
     '''
     b = part(binary, offset, context.len_index_mate_comp)
-    block = uncompressed_block(b, encrypted = True)
+    block = uncompressed_block(b, encrypted=True)
 
     assert len(block) == context.len_index_mate_unco
 
@@ -134,9 +135,8 @@ def analyze_keyword_indexs(binary, offset, mate):
         data = mate.indexs_mate[i]
 
         b = part(binary, point, data.len_comp)
-        block = uncompressed_block(b, encrypted = False)
-        ps = analyze_index(block, data)
-        pairs = [*pairs, *ps]
+        block = uncompressed_block(b, encrypted=False)
+        pairs += analyze_index(block, data)
 
         point += data.len_comp
 
@@ -160,8 +160,8 @@ def analyze_section_keyword(binary, offset):
     ]
 
     d = {}
-    for name, index, length in array:
-        d[name] = uint_be(binary, offset + index, length)
+    for name, i, length in array:
+        d[name] = uint_be(binary, offset + i, length)
     mate = KeywordSectionMate(**d)
 
     checksum = uint_be(binary, offset + 40, 4)
@@ -172,10 +172,55 @@ def analyze_section_keyword(binary, offset):
     m = analyze_keyword_index_mate(binary, offset + 44, mate)
     mate.indexs_mate = m
 
-    s = mate.len_index_mate_comp + 44
-    analyze_keyword_indexs(binary, offset + s, mate)
+    offset += mate.len_index_mate_comp + 44
+    analyze_keyword_indexs(binary, offset, mate)
 
-    return mate
+    offset += mate.len_indexs
+
+    return [mate, offset]
+
+
+def analyze_record_indexs(binary, offset, mate):
+    record = b''
+    for i in range(mate.num_index):
+        s = mate.lens_index_comp[i]
+        p = part(binary, offset, s)
+        b = uncompressed_block(p, encrypted=False)
+        assert len(b) == mate.lens_index_unco[i]
+        record += b
+        offset += s
+
+    return record
+
+
+def analyze_section_record(binary, offset, mate_keyword):
+    array = [
+        ['num_index', 0, 8],
+        ['num_record', 8, 8],
+        ['len_compunco', 16, 8],
+        ['len_indexs', 24, 8],
+    ]
+    d = {}
+    for name, i, length in array:
+        d[name] = uint_be(binary, offset + i, length)
+    mate_record = RecordSectionMate(**d)
+
+    assert mate_keyword.num_keyword == mate_record.num_record
+
+    offset += 32
+    point = offset
+    for _ in range(mate_record.num_index):
+        len_comp = uint_be(binary, point + 0, 8)
+        len_unco = uint_be(binary, point + 8, 8)
+        mate_record.lens_index_comp.append(len_comp)
+        mate_record.lens_index_unco.append(len_unco)
+        point += 16
+
+    assert (point - offset) == mate_record.len_compunco
+
+    offset = point
+
+    analyze_record_indexs(binary, offset, mate_record)
 
 
 def main():
@@ -183,7 +228,8 @@ def main():
         binary = file.read()
 
         i = analyze_section_header(binary, 0)
-        sk = analyze_section_keyword(binary, i)
+        mate, i = analyze_section_keyword(binary, i)
+        analyze_section_record(binary, i, mate)
 
 
 if __name__ == '__main__':
