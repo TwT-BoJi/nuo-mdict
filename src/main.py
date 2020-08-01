@@ -3,7 +3,8 @@ import zlib
 from log import log
 from util import (
     part,
-    part_till0,
+    part_0,
+    part_rn0,
     uint_be,
     uint_le,
     _mdx_decrypt,
@@ -35,8 +36,8 @@ def uncompressed_block(block, encrypted):
         (b'\x02\x00\x00\x00', uncompressed_zlib),
     ])
 
-    compressed = part(block, 8, len(block) - 8)
-    uncompressed = func_map[compress_type](compressed)
+    p = part(block, 8, len(block) - 8)
+    uncompressed = func_map[compress_type](p)
 
     checksum = uint_be(block, 4, 4)
     assert checksum == zlib.adler32(uncompressed)
@@ -86,11 +87,11 @@ def analyze_keyword_index_mate(binary, offset, context):
         offset += 8 + 8
 
         mate = KeywordIndexMate(
-            num_keyword = num_keyword,
-            len_comp = len_comp,
-            len_unco = len_unco,
-            head_keyword = head_keyword,
-            tail_keyword = tail_keyword,
+            num_keyword=num_keyword,
+            len_comp=len_comp,
+            len_unco=len_unco,
+            head_keyword=head_keyword,
+            tail_keyword=tail_keyword,
         )
 
         return (mate, offset)
@@ -123,7 +124,7 @@ def analyze_keyword_indexs(binary, offset, mate):
         point = 0
         for _ in range(mate.num_keyword):
             position = uint_be(block, point, 8)
-            keyword0 = part_till0(block, point + 8)
+            keyword0 = part_0(block, point + 8)
             keyword = keyword0[slice(0, -1)]
             pairs.append([keyword, position])
             point += 8 + len(keyword0)
@@ -173,7 +174,8 @@ def analyze_section_keyword(binary, offset):
     mate.indexs_mate = m
 
     offset += mate.len_index_mate_comp + 44
-    analyze_keyword_indexs(binary, offset, mate)
+    r = analyze_keyword_indexs(binary, offset, mate)
+    mate.keyword_index = r
 
     offset += mate.len_indexs
 
@@ -220,7 +222,10 @@ def analyze_section_record(binary, offset, mate_keyword):
 
     offset = point
 
-    analyze_record_indexs(binary, offset, mate_record)
+    r = analyze_record_indexs(binary, offset, mate_record)
+    mate_record.record_index = r
+
+    return mate_record
 
 
 def main():
@@ -228,8 +233,13 @@ def main():
         binary = file.read()
 
         i = analyze_section_header(binary, 0)
-        mate, i = analyze_section_keyword(binary, i)
-        analyze_section_record(binary, i, mate)
+        mate_keyword, i = analyze_section_keyword(binary, i)
+        mate_record = analyze_section_record(binary, i, mate_keyword)
+
+        i = mate_keyword.keyword_index[b'apple']
+        log(f'i { i }')
+        p = part_rn0(mate_record.record_index, i)
+        log(f'mate_record { p }')
 
 
 if __name__ == '__main__':

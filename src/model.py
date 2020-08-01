@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Any
 
 
 @dataclass
@@ -18,7 +18,8 @@ class KeywordSectionMate:
     len_index_mate_unco: Optional[int] = None
     len_index_mate_comp: Optional[int] = None
     len_indexs: Optional[int] = None
-    indexs_mate: Optional[List[KeywordIndexMate]] = None
+    indexs_mate: List[KeywordIndexMate] = field(default_factory=list)
+    keyword_index: Any = None
 
 
 @dataclass
@@ -29,3 +30,4 @@ class RecordSectionMate:
     len_indexs: Optional[int] = None
     lens_index_comp: List[int] = field(default_factory=list)
     lens_index_unco: List[int] = field(default_factory=list)
+    record_index: Optional[bytes] = None

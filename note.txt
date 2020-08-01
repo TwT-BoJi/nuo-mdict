@@ -2,3 +2,8 @@ https://github.com/twt-nim/writemdict/blob/master/fileformat.md
 https://bitbucket.org/xwang/mdict-analysis/src/master/readmdict.py
 
 wc -c mdict/coca.mdx
+
+TODO:
+    [ ] 重构
+    [ ] header section xml 解析
+    [ ] 是否加密

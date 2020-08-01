@@ -17,11 +17,18 @@ def part(sequence, offset, length):
     return sequence[slice(offset, offset + length)]
 
 
-def part_till0(sequence, offset):
+def part_0(sequence, offset):
     i = offset
     while sequence[i] != 0:
         i += 1
     return sequence[slice(offset, i + 1)]
+
+
+def part_rn0(sequence, offset):
+    i = offset
+    while part(sequence, i, 3) != b'\r\n\x00':
+        i += 3
+    return sequence[slice(offset, i + 3)]
 
 
 def uint_be(*args, **kwargs):
